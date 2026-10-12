@@ -1,0 +1,2106 @@
+% Reviewed standalone English write-up of the final construction.
+% UTF-8; no external bibliography file is required.
+% Suggested build: latexmk -pdf -outdir=pdf maximum_weight_sparse_subgraph_en_reviewed.tex
+% Mathematical review and reproducible finite checks: October 11, 2026.
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage[margin=26mm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{needspace}
+\usepackage[hidelinks,unicode]{hyperref}
+\usepackage{bookmark}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+\newcommand{\clj}[2]{\operatorname{cl}_{M_{#1}}(#2)}
+\newcommand{\Bj}[2]{B_{#1}(#2)}
+\newcommand{\rank}{\operatorname{rk}}
+\newcommand{\Sparse}{\textsc{Sparse}}
+\newcommand{\Filter}{\textsc{Filter}}
+\newcommand{\Circuits}{\textsc{Circuits}}
+\newcommand{\FlowZero}{\textsc{FlowZero}}
+\newcommand{\softO}{\widetilde O}
+\newcommand{\indeg}{d^-}
+\newcommand{\birth}{b}
+\newcommand{\botval}{\bot}
+\setlist{itemsep=3pt,topsep=5pt}
+\setlength{\emergencystretch}{2em}
+\floatstyle{ruled}
+\newfloat{algorithm}{htbp}{loa}
+\floatname{algorithm}{Algorithm}
+\hypersetup{
+ pdftitle={A Deterministic Almost-Linear-Time Algorithm for the Maximum-Weight (k,l)-Sparse Subgraph Problem},
+ pdfauthor={}
+}
+\title{A Deterministic Almost-Linear-Time Algorithm\\
+ for the Maximum-Weight $(k,\ell)$-Sparse Subgraph Problem\\[4pt]
+ \large The full classical range and a uniform additive input bound}
+\author{}
+\date{October 11, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+For each fixed $k\geq1$ and $0\leq\ell<2k$, we give a single
+deterministic word-RAM algorithm with worst-case running time
+$O(m+n^{1+o(1)})$ for the maximum-weight $(k,\ell)$-sparse
+subgraph problem, assuming that the edges are already ordered
+by nonincreasing weight. The algorithm does not depend on an
+exponent-error parameter, and the coefficient of the $m$ term
+does not depend on the recursion depth.
+
+In the upper range $k<\ell<2k$, we reduce the number of mandatory
+tight bodies geometrically using a fixed constant number of local
+greedy layers. Samples are generated implicitly from shared ordered
+incidence lists. Edges spanned by earlier selected edges of their
+body pair are deleted permanently. A separate saturation argument
+bounds priority-queue head repairs by $O(Dp+qD+f)$ at a stage with
+$q$ bodies, $p$ physical vertices, and $f$ known auxiliary constraints.
+Fixed first bindings and activation times preserve chronological
+correctness across stages without repeated ancestor queries.
+The union of all samples is an $O(n)$-edge certificate.
+
+This English version organizes the final construction and all
+required preliminary lemmas into a standalone presentation.
+The generic natural representation is used only to prove safety;
+the algorithm performs deterministic combinatorial operations.
+\end{abstract}
+
+\tableofcontents
+
+\section{Problem, model, and main theorem}
+\label{sec:problem}
+
+Let $G=(V,E)$ be a loopless undirected multigraph with $n$ vertices
+and $m$ edges. Vertex identifiers belong to $\{1,\ldots,n\}$.
+The input supplies a strict total edge order
+\[
+ e_1\succ e_2\succ\cdots\succ e_m
+\]
+consistent with nonincreasing weight; input order breaks ties.
+Nonpositive-weight edges may be omitted without changing the
+maximum attainable weight. We therefore work with positive weights.
+All subsequent greedy-output and certificate equalities refer to this
+retained positive-weight input. An empty input is returned immediately;
+we may therefore assume $n\geq2$.
+
+\begin{definition}
+An edge set $I$ is \emph{$(k,j)$-sparse} if
+\[
+ |I[X]|\leq\max\{k|X|-j,0\}
+ \qquad(X\subseteq V).
+\]
+A set $X$ with $|X|\geq2$ is \emph{tight} if
+$|I[X]|=k|X|-j$. A \emph{block} is an inclusion-wise maximal
+nontrivial tight vertex set.
+\end{definition}
+
+For $0\leq j<2k$, these independent edge sets form a matroid,
+denoted by $M_j$. Write $\Bj jA$ for the ordered matroid-greedy
+output on an edge set $A$, and $A_{>e}$ for the edges of $A$
+preceding $e$. The greedy output is a maximum-weight independent
+set and is determined by the supplied order.
+
+\begin{theorem}\label{thm:main}
+For fixed $k\geq1$ and $0\leq\ell<2k$, the maximum-weight
+$(k,\ell)$-sparse subgraph problem on ordered edges has a single
+deterministic word-RAM algorithm with worst-case running time
+\[
+ \boxed{O(m+n^{1+o(1)})}.
+\]
+The program and the coefficient of the $m$ term depend only on
+$k,\ell$. No choice of algorithm indexed by an arbitrarily small
+positive exponent is required.
+\end{theorem}
+
+The word length is $\Omega(\log(n+m+2))$, with a sufficiently large
+constant to address the polynomial-size tables used below.
+Vertex and edge identifiers, root-prefix timestamps, and the
+polynomially bounded integers in the combinatorial data structures
+fit in a machine word. The constants and the $o(1)$ term may
+depend on fixed $k,\ell$. We do not claim the same bound when
+$k$ is part of the input, or a corresponding almost-linear space
+bound. In particular, constant-time initializable direct-address
+tables are allowed \cite{initializable}.
+
+The flow subroutine in \cite{mcf} uses fixed-point numbers with
+$\log^{O(1)}z$ bits on an instance encoded with $z$ bits
+(its Section~2, ``Computational Model''). On our sparse networks
+$z=N\log^{O(1)}N$. Simulating those arithmetic operations on
+ordinary machine words has a polylogarithmic overhead, which is
+absorbed in $N^{1+o(1)}$. This simulation is confined to the sparse
+subroutines; the operations charged directly to the original $m$
+records use only a constant number of machine-word operations.
+
+The proof proceeds in three parts. First, we construct a
+deterministic almost-linear optimizer for sparse inputs and a
+compact history of all tight prefix blocks. Second, we establish
+a local sampling and body-compression lemma. Third, we execute
+sampling implicitly and compose the stages with fixed endpoint
+bindings. The complete algorithm appears in
+Section~\ref{sec:complete}.
+
+\subsection{Algorithmic primitives}
+
+The following published algorithms are used as subroutines.
+All their parameters other than the instance size are fixed here.
+\begin{enumerate}
+ \item Exact minimum-cost flow and circulation with polynomially
+ bounded integer capacities and costs can be computed
+ deterministically in almost-linear time \cite{mcf}.
+ \item An edge set known to decompose into $k$ forests can be
+ decomposed deterministically in almost-linear time \cite{forest}.
+ \item A rooted unit-capacity digraph known to have rooted
+ connectivity at least $a$ admits $a$ actual edge-disjoint spanning
+ out-arborescences, computable in $\softO(N+A)$ time for fixed
+ $a$ \cite{arborescences}. The bound reported in
+ \cite{arbo-study} is
+ $O(Aa\log N+Na^4\log^2N)$ for exact rooted connectivity $a$.
+ If only a lower bound is given, attach a new root by $a$ parallel
+ arcs to the old root, apply that algorithm, and remove these arcs.
+ \item For a fixed positive minimum-cut value, the required
+ inclusion-wise minimal directed minimum-cut sets can be extracted
+ in $\softO(N+A)$ time from the minset-poset representation
+ \cite{minset,minset-2026}. For value zero, SCCs suffice.
+\end{enumerate}
+Here $N$ and $A$ denote network vertices and arcs. Each explicit
+sparse instance is relabelled densely on $\{1,\ldots,N\}$; its
+separate metadata retain the original vertex identities and timestamps.
+The reductions below use these algorithms only on sparse networks.
+The orientation and rooted-connectivity perspective also appears
+in the recognition algorithms of \cite{recognition}.
+
+\section{Tight sets and consecutive sparsity matroids}
+\label{sec:matroids}
+
+\begin{lemma}[Uncrossing and closure]\label{lem:uncross}
+Let $I$ be independent in $M_j$. If tight sets $A,B$ have at
+least two common vertices, then $A\cap B$ and $A\cup B$ are tight,
+and there is no edge of $I$ between $A\setminus B$ and
+$B\setminus A$. Distinct blocks therefore intersect in at most
+one vertex and have disjoint internal edge sets.
+For a new edge $e=uv\notin I$,
+\[
+ e\in\clj jI
+ \quad\Longleftrightarrow\quad
+ u,v\text{ belong to a common tight set}.
+\]
+If $j<k$, distinct blocks are vertex-disjoint.
+Every nontrivial tight set has no isolated internal vertex.
+\end{lemma}
+\begin{proof}
+Supermodularity of induced edge counts and sparsity give
+\[
+ k|A|+k|B|-2j
+ \leq |I[A\cup B]|+|I[A\cap B]|
+ \leq k|A\cup B|+k|A\cap B|-2j.
+\]
+The two ends are equal, so all inequalities are equalities.
+For closure, a violated sparsity inequality in $I+uv$ must
+contain both endpoints and must have been tight in $I$.
+Conversely, adding an internal edge to a tight set violates its
+bound. With a one-vertex intersection, two tight sets would
+violate the union bound when $j<k$.
+For the last assertion, a tight two-vertex set has
+$2k-j>0$ edges. In a larger tight set, removing an isolated
+vertex would leave the same edge count but lower the sparsity
+bound by $k$, a contradiction.
+\end{proof}
+
+\begin{lemma}[Spanned tight graphs]\label{lem:spanned-tight}
+Let $I$ be independent in $M_j$, and let $T$ be an independent
+tight graph on $X$, where $|X|\geq2$. If every edge of $T$ belongs
+to $\clj jI$, then $X$ is contained in a block of $I$.
+\end{lemma}
+\begin{proof}
+Let $\mathcal Z$ be the blocks of $I$ meeting $X$ in at least two
+vertices, and put $Y=X\cup\bigcup_{Z\in\mathcal Z}Z$.
+Every edge of $T$ outside these blocks belongs to $I$, by
+Lemma~\ref{lem:uncross}. If $\mathcal Z$ is empty, this gives
+$T\subseteq I$, so $X$ itself is tight in $I$.
+Otherwise the internal edge sets of the blocks are disjoint, and
+\begin{align*}
+ k|X|-j=|T|
+ &\leq |I[Y]|-\sum_{Z\in\mathcal Z}|I[Z]|
+       +\sum_{Z\in\mathcal Z}(k|X\cap Z|-j)\\
+ &\leq k|Y|-j-\sum_{Z\in\mathcal Z}(k|Z|-j)
+       +\sum_{Z\in\mathcal Z}(k|X\cap Z|-j)\\
+ &\leq k|X|-j.
+\end{align*}
+The last inequality uses
+$|Y|\leq |X|+\sum_Z(|Z|-|X\cap Z|)$.
+Equality throughout forces $|I[Y]|=k|Y|-j$.
+Thus $Y$ is tight and a block containing $Y$ contains $X$.
+\end{proof}
+
+\begin{lemma}[Disjoint circuits]\label{lem:circuits}
+Let $1\leq j<2k$. If $I$ is independent in $M_{j-1}$, its $M_j$-circuits are
+pairwise edge-disjoint. Their supports are precisely the
+inclusion-wise minimal nontrivial $(k,j-1)$-tight sets $W$, and
+each such circuit is
+\[
+ I[W],\qquad |I[W]|=k|W|-(j-1).
+\]
+Consequently, $\Bj jI$ is obtained by deleting the last edge of
+each circuit in the supplied order.
+\end{lemma}
+\begin{proof}
+Every edge of a circuit must be internal to a violated set;
+otherwise its internal edges give a proper dependent subset.
+Independence in $M_{j-1}$ and dependence in $M_j$ determine the
+displayed edge count. If two circuits shared an edge, their
+supports would meet in two vertices. Uncrossing would make their
+intersection weakly tight and hence dependent in $M_j$,
+contradicting minimality unless the circuits were equal.
+Every dependence contains a circuit, and disjoint circuits
+interfere with none of the other greedy deletions.
+\end{proof}
+
+\begin{lemma}[Greedy compatibility]\label{lem:compatibility}
+For every ordered $E$ and $1\leq j<2k$,
+\[
+ \Bj j{\Bj{j-1}E}\subseteq\Bj jE.
+\]
+\end{lemma}
+\begin{proof}
+Suppose the stronger greedy algorithm accepts $e$ when restricted
+to the weaker greedy basis. Let $D$ be the weaker accepted prefix
+before $e$; thus $D+e$ is weakly independent. Let $\mathcal Z$
+be the maximal weakly tight blocks of $D$.
+Every earlier edge rejected by the weaker algorithm is internal
+to a member of $\mathcal Z$. The stronger restricted greedy
+algorithm accepts every edge of $D$ outside these blocks:
+otherwise Lemma~\ref{lem:circuits} would give a weakly tight
+circuit support containing such an edge. The edge $e$ is also
+outside the blocks.
+
+Let $A$ be the stronger full greedy prefix before $e$. Construct
+$K$ from the edges of $D+e$ outside the blocks and the sets
+$A[Z]$, $Z\in\mathcal Z$. Then $A+e\subseteq K$.
+For $|X|\geq2$, put
+\[
+ \mathcal Z_X=\{Z\in\mathcal Z:|Z\cap X|\geq2\},
+ \qquad Y=X\cup\bigcup_{Z\in\mathcal Z_X}Z.
+\]
+If $\mathcal Z_X$ is nonempty, weak sparsity of $D+e$ bounds
+the outside-block contribution by
+\[
+ k|Y|-(j-1)
+ -\sum_{Z\in\mathcal Z_X}(k|Z|-(j-1)).
+\]
+The inside contribution is at most
+$\sum_{Z\in\mathcal Z_X}(k|X\cap Z|-j)$. Using
+$|Y|\leq |X|+\sum_{Z\in\mathcal Z_X}(|Z|-|X\cap Z|)$, their sum is at most
+$k|X|-(j-1)-|\mathcal Z_X|\leq k|X|-j$.
+If $\mathcal Z_X$ is empty, $K[X]$ is a subset of the stronger
+restricted accepted prefix together with $e$, and is independent.
+Thus $K$ is independent in $M_j$, so $A+e$ is independent as well.
+\end{proof}
+
+\section{Sparse optimization and the complete prefix history}
+\label{sec:sparse}
+
+This section supplies the static algorithms used later on
+explicit graphs of $O(N)$ or $O(N\log(N+2))$ edges. These graphs
+contain only registered physical vertices and constant-size
+body frames; the original dense input is never passed to them.
+
+\subsection{Rooted-cut reductions}
+
+Let $I$ be $(k,t)$-sparse. If $t\geq k$, decompose $I$ into
+$k$ forests $T_1,\ldots,T_k$. A tight set $C$ satisfies
+\[
+ \sum_{i=1}^k (|C|-1-|T_i[C]|)=t-k.
+\]
+Every summand is nonnegative, so at least one of the first
+$t-k+1$ forests is connected on $C$.
+If $0<t<k$, decompose $I$ into $t$ forests and $k-t$
+pseudoforests. Tightness implies connectivity of $C$ in
+every forest part, so the first forest suffices.
+This mixed decomposition can also be constructed almost linearly:
+orient $I$ with indegree at most $k$, add $k-\indeg(v)$ root
+arcs to each vertex, and extract $t$ edge-disjoint spanning
+out-arborescences. Removing their root arcs gives the forest
+parts; the remaining orientation has indegree at most $k-t$
+and can be split into that many pseudoforests.
+
+Centroid-decompose the selected forest components. For every
+connected tight $C$, some call has a vertex set $U$ and centroid
+$u$ with $u\in C\subseteq U$: take the first centroid in $C$.
+Over all calls, vertex-set sizes sum to $O(N\log(N+2))$.
+A fixed bounded-indegree orientation permits induced edges
+to be listed with the same bound by scanning at most $k$
+incoming edges per vertex and using membership marks.
+
+For $t\geq k$, root every local forest at $u$, remove $u$, and
+add $k-\indeg(v)$ arcs $r\to v$, retaining the indegrees
+measured before removing $u$. The resulting digraph $R$ satisfies
+\begin{equation}\label{eq:upper-root}
+ \rho_R(X)=k|X|-|I[X\cup\{u\}]|\geq t-k=:\delta.
+\end{equation}
+Nonempty $\delta$-cut sets correspond exactly to tight sets
+containing $u$.
+For $0<t<k$, orient locally with capacities
+$b(u)=k-t$ and $b(v)=k$ otherwise, and add root arcs to fill
+these capacities. Then
+\begin{equation}\label{eq:lower-root}
+ \rho_R(X)=k|X|-t\mathbf1_{u\in X}-|I[X]|\geq0.
+\end{equation}
+Every nonempty zero-cut contains $u$ and is a tight set.
+Indeed, a root-avoiding set not containing $u$ has cut value at
+least $t>0$, while the singleton $\{u\}$ has cut value $k-t>0$.
+The required orientation follows from capacitated Hall
+inequalities and is found by a sparse flow reduction.
+For $t=0$, use one global bounded-indegree orientation and
+root completion; its cut formula is
+$\rho_R(X)=k|X|-|I[X]|$.
+
+\subsection{Listing the circuits}
+
+To compute $\Circuits(j,I)$, apply the reductions with $t=j-1$.
+In each call, enumerate the inclusion-wise minimal nonempty
+root-avoiding cut sets of the target value (zero or $\delta$),
+and translate them back to vertex sets. If there are no such
+sets, the call contributes no candidate.
+For positive $\delta$, the rooted reduction to the global
+minset-poset problem adds $\delta$ arcs from every nonroot
+vertex to $r$, a new vertex $z$, and $\delta$ arcs in each
+direction between $r$ and $z$. The global minimum-cut value
+is $\delta$, and cuts on the original nonroot vertices are unchanged.
+Every cut containing $r$ receives either the $\delta$ arcs from $z$
+or the $\delta$ arcs of a missing original vertex; a cut containing
+$z$ but not $r$ receives the $\delta$ arcs $r\to z$.
+Thus no smaller cut is introduced. Keep only minimal cuts avoiding
+both $r$ and $z$. For value zero, use source SCCs having no entering
+arc from outside the SCC; the root SCC is excluded.
+
+Minimal root-avoiding minimum-cut sets are disjoint: a nonempty
+intersection would, by cut submodularity, itself be a
+minimum-cut set. Candidate sizes therefore sum to $O(|U|)$
+per call, even when the centroid is added to every candidate.
+Every true circuit support appears in its covering centroid
+call. Process candidates by increasing vertex-set size,
+accepting a candidate precisely when none of its internal
+edges has already been marked; mark those edges on acceptance.
+A nonminimal candidate contains a smaller true circuit.
+A candidate sharing an edge with an accepted circuit contains
+that circuit, by uncrossing and minimality. This procedure
+therefore lists exactly the circuits of
+Lemma~\ref{lem:circuits}, in $N^{1+o(1)}$ time.
+
+\subsection{All tight prefix blocks}
+
+Fix an independent ordered set $F=\{f_1,\ldots,f_a\}$, and let
+$F_t=\{f_1,\ldots,f_t\}$. If $C$ is tight in a prefix, it is
+tight in the final set and $F[C]=F_t[C]$: a later internal
+edge would violate final independence. Its birth time is
+\[
+ \birth(C)=\max\{i:f_i\in F[C]\}.
+\]
+Hence the forest and centroid decompositions of final $F$
+cover every prefix tight set.
+
+Build each local rooted network from final $F$ and delete
+original edges in reverse order. An arc deletion $a\to b$
+is implemented as
+\begin{equation}\label{eq:transfer}
+ a\to b\ \longmapsto\ r\to b.
+\end{equation}
+This preserves the indegree total and can only increase
+root-cut values. In the upper reduction, deleting an edge
+from the removed centroid simply adds a root arc.
+
+For zero cuts, the maximal zero-cut is the set unreachable
+from $r$. For reachability, keeping the old arc and adding
+the new root arc is equivalent to replacement.
+Each vertex becomes reachable at most once, giving linear
+total scanning work in a local call.
+
+For $\delta>0$, extract $\delta$ spanning out-arborescences
+$P_1,\ldots,P_\delta$. After root arcs are removed, let
+$Q_1,\ldots,Q_\delta$ be their forests, and let $Z$ contain
+the other arcs. A nonempty $X$ is a $\delta$-cut exactly when
+each $Q_i[X]$ is connected and no $Z$-arc enters $X$:
+each arborescence contributes one entering arc per induced
+forest component, and all additional contributions are
+nonnegative.
+
+Maintain a partition of live vertices, refining it until
+every part is connected in every $Q_i$. If an extra arc
+enters a part from outside, delete its head from the live
+set and propagate further refinements. Every possible
+$\delta$-cut remains live and contained in one part:
+connectivity forces containment through refinements, and
+an entering extra arc excludes its head from every candidate
+cut contained in that part. At stability, the parts themselves
+are $\delta$-cuts, hence are exactly the maximal ones.
+
+If a deleted arc belongs to $P_i$, its subtree is reattached
+to the root. The arborescence remains valid, while $Q_i$
+loses one edge. If the deleted arc is extra, its replacement
+root arc excludes its head. Thus only splitting and deletion
+are needed throughout the reverse history.
+
+Dynamic forests and smaller-side relabeling give a
+$\softO(N+A)$ total bound for each local history. Here is an
+implementation of the refinement and propagation work, including
+arcs that become external when a part splits.
+
+Maintain each $Q_i$ as a decremental forest, cutting also every
+forest edge whose endpoints acquire different part labels and
+every edge incident to a deleted vertex. These additional cuts
+do not remove an edge internal to any surviving candidate cut:
+such a candidate is contained in one current part and uses only
+live vertices. Consequently every maintained forest component
+is contained in one part. Keep an explicit component identifier
+for each live vertex, retaining the identifier of the larger
+component on a cut and relabelling the smaller component.
+Deterministic balanced Euler-tour trees give component sizes,
+cuts, and enumeration of the smaller component in
+$O(\log(N+2)+\text{enumerated size})$ time.
+Each vertex changes its component identifier only
+$O(\log(N+2))$ times in each of the fixed number of forests.
+
+For every part and every forest, store a balanced dictionary of
+the component identifiers occurring in that part, with their
+vertex counts. If two components occur, enumerate the smaller
+of two such components and move it to a new part. It has at most
+half the old part's vertices. Update the dictionaries and scan
+the original forest and extra-arc incidences of moved vertices.
+Cut forest edges made external by the split, and queue the head
+of each extra arc newly entering a part. Scan all extra arcs once
+initially. When a queued head is deleted, cut its forest
+incidences, remove it from the dictionaries, and scan its extra
+incidences; in particular an outgoing extra arc may now exclude
+its live head. Duplicate queue entries are checked against the
+current labels and live flags before they are used. Perform all
+cross-part forest cuts before choosing the next refinement.
+
+Part labels, like forest-component labels, move only to smaller
+classes, so a live vertex changes them $O(\log(N+2))$ times.
+Each original incidence is therefore scanned
+$O(\log(N+2))$ times, each forest edge is cut at most once,
+and each vertex is deleted at most once. Dictionary and forest
+operations add at most polylogarithmic factors. This proves
+the stated $\softO(N+A)$ total bound without charging a scan of
+a surviving large part after every update.
+
+Record stable parts in a splitting/deletion tree, suppressing
+unchanged parts and storing vertex membership by the tree rather
+than copying every part. Splits have linear total tree size;
+unary shrinkages are charged to the vertices deleted at those
+shrinkages. Thus each local history has linear size.
+
+To compile the local trees globally, assign each original edge
+to its smallest local tight ancestor, if one exists. This ancestor
+is found from the endpoint leaves by LCA preprocessing of the
+membership tree; in the upper reduction an edge incident to the
+centroid uses the other endpoint's leaf. The centroid is common
+to all the local tight sets and is not duplicated as a membership
+leaf. Ancestors that do not represent stable tight sets are
+skipped. Internal edge sets are laminar within a local tree,
+so births are computed by subtree maxima of assigned edge indices.
+These assignments and computations take $\softO(N+A)$ time.
+Form a timestamped auxiliary graph on original
+edge-elements and local tight nodes: connect each edge to
+its assigned node at that node's birth, and each node to
+its first tight parent at the parent's birth.
+
+At time $t$, retain only active components containing at least
+one activated tight node. Their projections onto original
+edge-elements are exactly the internal edge sets of the
+maximal blocks of $F_t$. Indeed, a shared internal edge permits
+tight-set uncrossing and joins only one global block.
+Conversely, every global block is a maximal local candidate
+in a centroid call covering it, so all its internal edges
+are connected there.
+An isolated edge leaf, or an edge group with no activated tight
+node, is not a block. This distinction is necessary, for example,
+when a single accepted edge is not yet a tight two-vertex graph.
+
+Process equal timestamps in batches and record the resulting
+union history. Suppress auxiliary nodes and unary nodes that
+do not change an edge group. Preserve the first activation
+of a one-edge tight block separately from its edge leaf.
+There are $O(a)$ genuine block nodes and merges.
+A nontrivial tight set has no isolated internal vertex, so
+its vertex set is determined by its internal edge endpoints.
+This yields the compact history in $N^{1+o(1)}$ time.
+
+\subsection{A constant-time chronological closure index}
+
+Orient final $F$ with indegree at most $k$. For a historical
+tight block $C$, define its ports by
+\[
+ \Pi(C)=\{v\in C:\indeg_{F[C]}(v)<k\}.
+\]
+Since the internal indegree deficit sums to $j$,
+$|\Pi(C)|\leq j$. A nonport vertex is \emph{saturated}.
+It can be saturated in only one current maximal block,
+because those blocks have disjoint internal edge sets.
+
+Compute port lists by merging internal indegree maps up the
+edge-group hierarchy, always moving the map of the smaller
+edge group, measured by its number of edge leaves. Each map has
+at most twice that many vertex entries, and the edge-group size
+at least doubles whenever it is moved. This gives
+$O(N\log(N+2))$ total entry visits even when maps share keys.
+Store the deficient entries separately, so an entire large
+map is never rescanned at every ancestor. Update this list only
+at touched keys; at a genuine tight node it has at most $j$
+entries. Deterministic dictionaries give total cost
+$\softO(N)$.
+For a vertex of final indegree $k$, let its anchor be the
+lowest genuine block node containing all its incoming edge
+leaves. The anchor is found by a constant number of LCA
+queries in preprocessing, followed by the nearest genuine-block
+ancestor lookup. If the incoming leaves have no common genuine
+block ancestor, the vertex has no anchor; an artificial root
+joining different history trees is never a block. At time $t$,
+its highest activated ancestor is
+the saturated owner $o_t(v)$, if one exists.
+Explicit smaller-class relabeling on this known union tree
+costs $O(N\log(N+2))$ in total and permits $O(1)$ owner queries;
+the specialized union-find of \cite{static-union} is another
+implementation.
+
+For each distinct pair of ports, precompute
+\[
+ \beta(u,v)=\min\{\birth(C):u,v\in\Pi(C)\},
+\]
+with value $+\infty$ when the pair is absent. There are
+$O(N)$ such pairs. Two stable counting sorts by endpoint
+identifier, followed by merging with the query-pair list,
+give every offline $\beta$ answer in $O(N+Q)$ time.
+For a new edge $uv\notin F_t$, closure holds exactly when
+\begin{enumerate}
+ \item $o_t(u)=o_t(v)\ne\botval$;
+ \item one endpoint has a saturated owner and the other is
+ a port of that owner; or
+ \item $\beta(u,v)\leq t$.
+\end{enumerate}
+These are precisely the cases in which both endpoints lie
+in a common current block. Each query uses constant work.
+For $j=0$, closure is membership of both endpoints in the
+global unreachable set, whose entry times were recorded above.
+
+Consequently, for fixed independent $F$, the operation
+\[
+ \Filter(j,F,E)=
+ \{e\in E:e\notin\clj j{F_{>e}}\}
+\]
+costs $O(N^{1+o(1)}+|E|)$ deterministically.
+The block history and port lists themselves are computed
+without scanning a separate dense edge set.
+
+\subsection{The sparse optimizer}
+
+\begin{proposition}\label{prop:sparse}
+For fixed $k\geq1$, $0\leq j<2k$, and $|E|=O(N\log(N+2))$, the ordered greedy
+output $\Bj jE$ can be computed deterministically in
+$N^{1+o(1)}$ time. Mandatory independent edges may be placed
+first in the order.
+\end{proposition}
+\begin{proof}
+For $j=0$, independence is equivalent to assigning each edge
+to one endpoint, with at most $k$ assignments per vertex.
+Build a circulation network with an edge-node $x_i$ for
+each ordered edge $e_i=uv$, arcs $s\to x_i$ of capacity one
+and cost $-(a-i+1)$, zero-cost unit arcs $x_i\to u,x_i\to v$,
+arcs $v\to t$ of capacity $k$, and a zero-cost return arc
+$t\to s$ of capacity $kN$, where $a=|E|$.
+An integral minimum-cost circulation selects the maximum
+weight independent set for these strictly ordered rank costs.
+Matroid greedy depends only on the order, so its output is
+exactly $\Bj0E$ for the original weights as well.
+The distinct positive surrogate weights make the optimal edge
+set unique; alternative optimal routings of its endpoint
+assignments do not affect the selected set.
+All numbers are polynomially bounded, and \cite{mcf} gives
+the required almost-linear running time.
+
+For $j>0$, repeatedly perform
+\[
+ \begin{aligned}
+ B&\gets\Sparse(j-1,E),\\
+ F&\gets B\setminus
+ \{\text{last edge of each }C\in\Circuits(j,B)\},\\
+ E&\gets\Filter(j,F,E),
+ \end{aligned}
+\]
+until $E=F$. Initially take the previous round's set to be empty.
+The filter retains $F$, because $F$ is independent.
+The filter never deletes an edge of the full greedy optimum
+$O$: a deleted edge is spanned by earlier input edges.
+By Lemmas~\ref{lem:circuits} and \ref{lem:compatibility},
+every produced $F$ is contained in $O$.
+
+Let $F_0$ be the previous round's set. Deleting input edges
+cannot turn a previously accepted weaker greedy edge into
+a rejected edge, so $F_0\subseteq B$. Since $F_0\subseteq O$,
+the stronger restricted greedy algorithm also accepts its
+edges, and $F_0\subseteq F$.
+Every stronger circuit in $B$ contains at least two edges
+outside $F_0$. Its last edge cannot belong to $F_0$.
+If that last edge were its only edge outside $F_0$, the
+previous filter would already have deleted it.
+The circuits are edge-disjoint, so at most
+$|B\setminus F_0|/2$ edges are deleted. With $r=|O|$,
+\[
+ |F|-|F_0|\geq
+ \frac{|B|-|F_0|}{2}\geq\frac{r-|F_0|}{2}.
+\]
+The missing optimum size halves every nonfinal round.
+There are $O(\log(N+2))$ rounds. Once $F=O$, the next
+filter leaves exactly $F$.
+
+The recurrence is
+$T_0(N)=N^{1+o(1)}$ and
+$T_j(N)\leq O(\log(N+2))(T_{j-1}(N)+N^{1+o(1)})$.
+Its depth is fixed, so $T_j(N)=N^{1+o(1)}$.
+Independent mandatory edges placed first are all accepted.
+\end{proof}
+
+\section{The lower range: an ordered union certificate}
+\label{sec:lower}
+
+For $0\leq\ell\leq k$, the sparsity matroid is the union of
+$\ell$ graphic and $k-\ell$ bicircular matroids; the latter
+have pseudoforests as their independent sets
+\cite{recognition}. We use the following general certificate.
+
+\begin{lemma}\label{lem:union-certificate}
+Let $U=N_1\vee\cdots\vee N_k$ be a union of ordered matroids
+on $E$, and let $R$ be an integer with
+$R\geq\max\{1,\sum_i r_i(E)\}$.
+Set $L=1+\lceil\log_2(R+1)\rceil$.
+Create $L$ cycles of layers, each cycle containing
+$N_1,\ldots,N_k$ in that order. Insert each edge into the
+first layer that accepts it, or discard it if all reject.
+The union $H$ of the layers contains $B_U(E)$, and
+$|H|\leq RL$.
+\end{lemma}
+\begin{proof}
+Every earlier layer spans every element stored in a later
+layer in the earlier layer's matroid, at every input prefix.
+Suppose $U$-greedy accepts $e$ but every layer rejects it.
+Put $A=E_{>e}$ and choose a minimizer $X\subseteq A$ of
+the union rank formula
+\[
+ r_U(A)=|A\setminus X|+\sum_i r_i(X).
+\]
+Write $Q_i=N_i/X$. Comparing $X$ with $X\cup Y$ shows that
+every $Y\subseteq A\setminus X$ satisfies
+$|Y|\leq\sum_i r_{Q_i}(Y)$.
+Thus $A\setminus X$ is independent in the union of the
+quotients and has size at most $R$.
+Moreover, $e$ is not a loop in at least one quotient;
+otherwise choosing $X+e$ in the rank formula for $A+e$
+would show that $e$ does not increase union rank.
+
+All layer sets in the rest of this argument are evaluated just
+before $e$. Let $K_c$ be the stored elements outside $X$ in cycles
+strictly after cycle $c$. Each layer $B_{c,i}\setminus X$
+spans $K_c$ in $Q_i$. Hence
+\[
+ |K_c|\leq\sum_i r_{Q_i}(K_c)
+ \leq\sum_i|B_{c,i}\setminus X|
+ =|K_{c-1}|-|K_c|.
+\]
+It follows that $|K_c|\leq |K_{c-1}|/2$.
+Since $|K_0|\leq R$, we have $|K_{L-1}|<1$.
+Every layer in the final cycle is therefore contained
+in $X$, yet spans $e$. This makes $e$ a loop in every
+$Q_i$, a contradiction.
+Thus no greedy optimum edge is discarded. Removing
+greedy-rejected edges does not change the greedy output,
+and each cycle has size at most $R$.
+\end{proof}
+
+\begin{proposition}\label{prop:lower}
+The lower range has a deterministic
+$O(m+n^{1+o(1)})$ algorithm.
+\end{proposition}
+\begin{proof}
+Use Lemma~\ref{lem:union-certificate} with $R=kn$.
+Within each layer, store explicit component identifiers
+and component lists, relabelling the smaller list on a merge.
+A graphic layer rejects $uv$ exactly when its endpoints
+are in the same component. A bicircular layer rejects
+$uv$ exactly when both endpoints belong to unicyclic
+components, which may be the same component.
+Tree-component vertices are marked when their component
+becomes unicyclic; every vertex receives this mark at most
+once in a layer.
+Closure queries therefore take worst-case constant time,
+and maintenance costs $O(n\log(n+2))$ per layer.
+
+Within each of the two layer types, earlier layers span
+later layers, so rejecting layers form an initial segment.
+First test only the final layer of each type that is present.
+If every present type rejects, discard the edge in constant time.
+Otherwise binary-search the accepting types to find the
+first accepting layer, and choose the earliest among them.
+Binary searches occur only for retained edges, of which
+there are $O(n\log(n+2))$.
+The total construction cost is
+$O(m+n\log^2(n+2))$.
+Apply Proposition~\ref{prop:sparse} to the resulting
+$O(n\log(n+2))$-edge certificate.
+\end{proof}
+
+\section{Bodies, physical pins, and logical block size}
+\label{sec:bodies}
+
+For the remainder of the construction, assume
+$k<\ell<2k$ and set $c=2k-\ell\geq1$.
+A \emph{body} is a mandatory tight graph. Its \emph{pins}
+are physical vertices, whose identities are retained even
+when the internal body graph is replaced by a small frame.
+Different bodies at the start of a stage are vertex-disjoint.
+Their mandatory bases have union $P_0$.
+
+\subsection{Frames and the natural representation}
+
+The natural representation of the sparsity matroid
+\cite{natural} can be described using a generic matrix
+$U$ with $k$ rows $U_v$ per physical vertex and $\ell$ columns.
+An edge row is supported on its endpoints and satisfies
+$a_{e,u}U_u+a_{e,v}U_v=0$.
+The nullspace of a tight body's internal basis is exactly
+\begin{equation}\label{eq:motions}
+ \xi_v=U_v\alpha_A\quad(v\in A),
+ \qquad \alpha_A\in\mathbb R^\ell.
+\end{equation}
+The stacked matrix $U$ on a nontrivial body has column rank
+$\ell$, and its independent tight basis has $k|A|-\ell$ rows.
+Its nullspace therefore has dimension $\ell$ and equals the
+displayed $\ell$-dimensional space, which is already annihilated
+by every internal row. In particular the body parameter is unique.
+All generic statements can be made simultaneously on a
+sufficiently large universe, padded with isolated vertices
+if necessary. No such matrix is constructed by the algorithm.
+
+A constant-size tight frame can be built explicitly.
+Let $a=\max\{2,\lceil\ell/c\rceil\}$.
+On $a$ vertices, the complete multigraph with $c$ copies
+per pair contains a tight graph with $ka-\ell$ edges.
+For proper subsets of size $x\geq2$,
+\[
+ kx-\ell-c\binom{x}{2}
+ =-\frac c2(x-2)(x-\ell/c)\geq0.
+\]
+Retain any $ka-\ell$ edges. Enlarge the frame by adding
+vertices with $k$ incident edges, at most $c$ per old
+vertex pair; $ca\geq k$ guarantees sufficient capacity.
+This preserves sparsity and tightness.
+Choose the final constant frame size at least
+\begin{equation}\label{eq:frame-width}
+ h=\max\{k,2,\lceil\ell/c\rceil\}.
+\end{equation}
+
+Attach a fresh pin $v$ to $k$ distinct frame vertices.
+The enlarged graph is tight, so these attachments impose
+exactly $\xi_v=U_v\alpha_A$. Pins need only be registered
+when an actually retained edge uses them. Before registration,
+their private attachments are understood implicitly.
+Registering a fresh pin creates no new maximal block
+apart from extending the block containing its frame.
+To see this, let $C$ be a maximal tight block containing the
+fresh pin before any additional incident edge is inserted.
+A nontrivial tight set has no isolated internal vertex, so $C$
+contains at least one of the pin's frame neighbors. It therefore
+meets the enlarged tight frame in at least two vertices.
+Uncrossing and maximality force $C$ to contain the whole enlarged
+frame. Smaller tight subsets need not contain all the attachments:
+for $(k,\ell)=(2,3)$ a single attachment is already tight on its
+two endpoints.
+
+\begin{lemma}[Exact disjoint-body count]\label{lem:body-count}
+For an edge set $J$ joining distinct bodies, let $p_i(S)$
+be the number of distinct pins in body $A_i$ incident to
+$S\subseteq J$. Then $J$ is independent after contracting
+$P_0$ exactly when
+\begin{equation}\label{eq:body-count}
+ |S|\leq\sum_i\min\{\ell,kp_i(S)\}-\ell
+ \qquad(\varnothing\ne S\subseteq J).
+\end{equation}
+\end{lemma}
+\begin{proof}
+For necessity, include the whole $A_i$ when $p_i(S)\geq2$,
+and include only the one incident pin when $p_i(S)=1$.
+Subtracting the mandatory internal edges from the sparsity
+bound on this vertex set gives \eqref{eq:body-count}.
+
+For sufficiency, take any vertex set $Y$ and put
+$a_i=|Y\cap A_i|$. If $J[Y]\ne\varnothing$, the internal
+mandatory contribution is at most $ka_i-\ell$ for $a_i\geq2$,
+and zero for $a_i=1$. Apply \eqref{eq:body-count} to $J[Y]$:
+\[
+ |P_0[Y]|+|J[Y]|
+ \leq \sum_{a_i\geq2}(ka_i-\ell)
+      +\sum_i\min\{\ell,ka_i\}-\ell
+ =k|Y|-\ell.
+\]
+If $J[Y]$ is empty, mandatory sparsity is enough.
+\end{proof}
+
+\begin{corollary}[Constant-rank local oracle]\label{cor:local}
+Between two disjoint bodies, $J$ is independent exactly when
+\begin{equation}\label{eq:local}
+ |J|\leq\ell,\qquad d_J(v)\leq k\ (v\text{ a pin}),\qquad
+ |J_{uv}|\leq c\ (u,v\text{ a pin pair}).
+\end{equation}
+Independence and closure relative to a basis of size at
+most $\ell$ are decidable in constant time.
+\end{corollary}
+\begin{proof}
+In \eqref{eq:body-count}, each body's contribution is $k$
+for one incident pin and $\ell$ for at least two.
+Subsets using at least two pins on both sides have bound
+$\ell$; a star has bound $k$; and a single pair has bound
+$c$. These are exactly the displayed conditions and their
+subset consequences.
+\end{proof}
+
+For a fixed body $A_i$, replace all its neighboring bodies
+by one independent body, retaining every physical neighbor
+pin identity. This gives its \emph{local matroid}, of rank
+at most $\ell$, with oracle \eqref{eq:local}.
+This operation is used for sampling, not as a global
+independence oracle.
+
+\subsection{Logical size and the number of large bodies}
+
+Let $F$ be an independent set of new edges after $P_0$.
+Its size is at most $\ell q$, where $q$ is the number
+of old bodies. For $q\geq1$, sparsity on the union of all body
+vertices and subtraction of their mandatory bases gives even
+$|F|\leq\ell(q-1)$; for $q=0$, $F$ is empty.
+Throughout the block history
+all of $P_0$ is present. Prefixes during the preliminary insertion
+of individual mandatory edges are not part of this history;
+they are contracted to the single initial timestamp zero.
+In a prefix $P_0+F'$, a maximal tight block
+$C$ either contains a whole $A_i$ or meets it in at most
+one pin, by uncrossing.
+Let $b_C$ count the whole old bodies in $C$ and $p_C$
+the remaining pins. Define its \emph{logical size} by
+$\sigma(C)=b_C+p_C$; this is also the number of old
+bodies it meets.
+
+\begin{lemma}\label{lem:logical-size}
+For every prefix block,
+\begin{equation}\label{eq:logical-bars}
+ |F'[C]|=\ell b_C+kp_C-\ell.
+\end{equation}
+The sum of logical sizes of current blocks is $O(q)$.
+For $\sigma(C)\geq2$,
+$|F'[C]|\geq(c/2)\sigma(C)$.
+For a threshold $s\geq2$, the number $Q$ of persistent
+identifiers born for blocks of logical size at least $s$
+satisfies
+\begin{equation}\label{eq:large-budget}
+ Q\leq\frac{2\ell q}{cs}.
+\end{equation}
+\end{lemma}
+\begin{proof}
+Subtract the internal mandatory bases of the $b_C$
+complete bodies from tightness to obtain
+\eqref{eq:logical-bars}.
+Let $r$ be the number of current blocks containing whole
+old bodies. They partition those $q$ bodies. All current
+internal new-edge sets are disjoint, so
+\[
+ k\sum_{b_C\geq1}p_C+
+ \sum_{b_C=0}(kp_C-\ell)
+ \leq \ell q-\ell(q-r)=\ell r.
+\]
+In the second sum, $p_C\geq2$ and
+$kp_C-\ell\geq cp_C/2$.
+The total pin contribution is therefore $O(q)$.
+Also $\ell b_C+kp_C-\ell\geq k\sigma(C)-\ell
+\geq c\sigma(C)/2$ when $\sigma(C)\geq2$.
+
+Whenever a new large block contains a previous large
+block, inherit one such identifier and retire the others.
+Otherwise create a new identifier and reserve the new
+block's internal $F$-edges. Birth blocks of different
+identifiers have disjoint such edge sets: a shared edge
+would force containment in an existing large descendant.
+Every birth reserves at least $cs/2$ edges, proving
+\eqref{eq:large-budget}.
+\end{proof}
+
+The compact prefix history from Section~\ref{sec:sparse}
+computes these objects in $q^{1+o(1)}$ time on the actually
+registered source graph. Vertices not incident to $F$
+remain lazy. A lazy pin can enter a maximal block only
+together with its whole old body.
+
+\section{Historical hinges, straddlers, and endpoint coverage}
+\label{sec:cover}
+
+\subsection{The total historical hinge count}
+
+\begin{lemma}\label{lem:hinges}
+Consider a tracked family of tight sets in an independent
+monotone graph. Active sets intersect pairwise in at most
+one physical vertex. An identifier follows an increasing
+set until it is retired into a containing tracked set.
+Let $R$ be the total number of identifiers ever introduced.
+The set $T$ of vertices ever belonging to at least two
+active tracked sets has
+\[
+ |T|\leq3\ell R.
+\]
+After identifying retired body parameters with their
+successors, all required point--body attachments and
+identifier identifications have an $O(R)$-size history.
+\end{lemma}
+\begin{proof}
+Fix a bounded-indegree orientation of the final independent
+graph. Each tracked tight set has at most $\ell$ ports,
+because its internal indegree deficit is $\ell$.
+A shared vertex is a port of at least one participating
+set: disjoint internal edge sets cannot both contain
+all its $k$ incoming edges.
+Thus at most $\ell R$ vertices are shared at any one time.
+
+A shared vertex ceases to be shared only when its
+participating identifiers are identified. At an
+identification involving $a\geq2$ identifiers, each
+disappearing shared vertex is a port of one of those
+sets, so at most $\ell a$ disappear.
+There are at most $R$ retirements, and
+$\sum a\leq2R$, charging each event to its $a-1$
+retired identifiers. The number of first appearances
+as a shared vertex is at most the final shared count
+plus all disappearances. Hence $|T|\leq3\ell R$.
+
+For the attachment history, track port occurrences
+$(v,\text{identifier})$ with $v\in T$.
+A retired identifier loses at most $\ell$ such occurrences.
+On a surviving increasing identifier, a port disappears
+only by becoming saturated. The first saturated owner
+of a vertex persists in a growing successor set.
+A different saturated owner would require identification:
+two simultaneously distinct tight sets cannot both
+saturate that vertex. The first saturation is charged
+once per vertex, and the other losses to retirements.
+The total number of port occurrences is therefore
+$O(\ell R+|T|)=O(R)$.
+
+Record an attachment for each new port occurrence.
+For a saturated occurrence, an attachment to its first
+saturated owner suffices; later parameter identifications
+transfer it to successors. This records all necessary
+relationships. The prefix history, port lists, and owner
+updates extract them in almost-linear preprocessing time.
+The argument uses tightness, pairwise one-vertex
+intersection, and monotone containment, rather than a
+particular size threshold.
+\end{proof}
+
+\subsection{Old bodies spanning different large blocks}
+
+An old body is a \emph{straddler} if it is not wholly
+contained in a large current block but has at least two
+distinct pins in large blocks. Those pins lie in different
+large blocks.
+
+\begin{lemma}\label{lem:straddlers}
+With $b$ current large blocks and $a$ current straddlers,
+\[
+ ca\leq\ell(b-1)\qquad(b\geq1).
+\]
+If $Q$ large identifiers are born in the complete history,
+the set $X_{\mathrm h}$ of old bodies ever becoming
+straddlers satisfies
+\begin{equation}\label{eq:straddler-history}
+ |X_{\mathrm h}|\leq(2\ell/c+3\ell)Q.
+\end{equation}
+\end{lemma}
+\begin{proof}
+Take the internal bases of the $b$ large blocks and the
+$a$ straddling old bodies. They are edge-disjoint subsets
+of the independent source graph. Counting their vertex
+sets separately overcounts their union by at least $2a$.
+Sparsity of the union gives
+$2ka\leq\ell(b+a-1)$, which is the first inequality.
+
+A straddler loses that status only when swallowed
+entirely by a large block; it can never become a
+straddler again. If the union of $d$ old large children
+of the swallowing block already contains two pins of
+the swallowed body, the snapshot bound charges at most
+$\ell(d-1)/c$ such deaths to the children.
+The sum of $d-1$ over large identifications is at most $Q$.
+
+Otherwise one of its former large-block pins $z$ lies in
+a large block outside the swallowing union. After the
+swallowing, $z$ is a shared vertex of two large blocks.
+Different swallowed old bodies give different $z$,
+because old bodies are disjoint. Lemma~\ref{lem:hinges}
+therefore bounds these deaths by $3\ell Q$.
+Finally at most $\ell Q/c$ straddlers remain alive.
+These three bounds give \eqref{eq:straddler-history}.
+The second death case is essential: swallowing a
+straddler need not merge two preexisting large blocks.
+\end{proof}
+
+\subsection{Logical ports and the potential}
+
+Assign each edge of final $F$ to one of its physical
+endpoints so that a pin receives at most $k$ assignments
+and all pins of one old body together receive at most
+$\ell$. Such an assignment follows from
+Lemma~\ref{lem:body-count} and capacitated Hall inequalities.
+It is found by an almost-linear sparse flow computation.
+Explicitly, use a unit-capacity source arc for each edge of $F$,
+arcs from that edge-node to its two pin-nodes, capacity-$k$ arcs
+from each pin-node to its old-body node, and capacity-$\ell$ arcs
+from body nodes to the sink. For every $S\subseteq F$ the
+available endpoint capacity is
+$\sum_i\min\{\ell,kp_i(S)\}$, at least $|S|$ by
+\eqref{eq:body-count}. Capacitated Hall therefore routes all
+edge units. Integral flow gives the asserted assignment on an
+$O(q)$-size network of actually registered pins.
+
+The logical objects of a block $C$ are its complete old
+bodies, of capacity $\ell$, and its individually intersected
+pins, of capacity $k$. By \eqref{eq:logical-bars}, their
+internal assignment deficit sums to $\ell$.
+At most $\ell$ objects are therefore \emph{logical ports}.
+This assignment is distinct from the full-graph orientation
+used in Lemma~\ref{lem:hinges}.
+
+Fix $D\geq4\ell$ and
+\[
+ s=\max\{2,\lfloor D/(4\ell)\rfloor\}.
+\]
+Let $\mathcal S$ be the inclusion-wise maximal historical
+blocks of logical size less than $s$.
+Their internal new-edge sets are disjoint, and
+Lemma~\ref{lem:logical-size} gives
+\[
+ \sum_{C\in\mathcal S}\sigma(C)\leq q+2\ell q/c.
+\]
+Blocks of logical size one are old bodies and contribute
+no internal new edges.
+Define
+\begin{equation}\label{eq:potential}
+ p(A_i)=\deg_F(A_i)+
+ \ell\sum_{\substack{C\in\mathcal S\\
+             A_i\text{ has a logical port object in }C}}
+          (\sigma(C)-1).
+\end{equation}
+If $A_i$ is only partially in $C$, its object is the
+single common pin. Since each block has at most $\ell$
+logical ports,
+\begin{equation}\label{eq:potential-sum}
+ \sum_i p(A_i)\leq P_*q,\qquad
+ P_*=2\ell+\ell^2(1+2\ell/c).
+\end{equation}
+Let
+\[
+ X=\{A_i:p(A_i)\geq D/2\}\cup X_{\mathrm h}.
+\]
+Equations \eqref{eq:large-budget}--\eqref{eq:potential-sum}
+imply $|X|=O(q/D)$ and $Q=O(q/D)$.
+
+\begin{lemma}[Endpoint coverage]\label{lem:cover}
+Suppose a chronological sample $H$ has at most $\ell$
+edges per old body pair, $F$ is its greedy basis after
+$P_0$, and every omitted edge that remains globally open
+is spanned by each of $D$ disjoint local layers at both
+end bodies. Then every such omitted edge has each endpoint
+in an old body from $X$ or in a current large block.
+\end{lemma}
+\begin{proof}
+Let $u\in A_i$, with $A_i\notin X$, and suppose $u$ is
+outside all current large blocks. If $A_i$ were wholly
+in a large block, this would be impossible.
+Since $A_i$ never straddles, at most one of its pins,
+say $x$, belongs to large blocks. Thus $u\ne x$.
+
+Consider earlier sample edges at $A_i$.
+Edges in $F$ are charged to $\deg_F(A_i)$.
+Every other earlier sample edge is spanned by its
+$F$-prefix, so both endpoints lie in a prefix block.
+A small such block lies in a member $C$ of $\mathcal S$.
+The body-pair cap bounds its contribution at $A_i$ by
+$\ell(\sigma(C)-1)$.
+If its object is a logical port, this is charged to
+\eqref{eq:potential}. Among the maximal historical small blocks
+in $\mathcal S$, there is at most one in which its object is
+saturated: full-body saturation
+uses $\ell$ assignments, and two saturated single pins
+would use $2k>\ell$ assignments on disjoint internal
+edge sets. That one small block contributes at most
+$\ell(s-1)\leq D/4$.
+Edges spanned in large blocks use pin $x$ at $A_i$.
+Hence fewer than $p(A_i)+D/4<3D/4$ earlier sample
+edges can use a pin other than $x$.
+
+Every one of the $D$ disjoint local bases spanning the
+omitted $uv$ must contain an edge not incident to $x$.
+Indeed, a basis using only $x$ has size at most
+$k<\ell$, has degree zero at $u$, degree at most
+$c<k$ at $v$, and multiplicity zero on $uv$.
+The local oracle therefore does not span $uv$.
+This requires at least $D$ non-$x$ edges, a contradiction.
+The argument is symmetric for the other endpoint.
+\end{proof}
+
+\section{The adaptive local sample}
+\label{sec:sample}
+
+At a stage, let $q$ be the number of disjoint mandatory
+old bodies. Besides remaining original edges, a sorted
+stream of $f=O(q)$ known auxiliary edges may arrive.
+These \emph{known constraints} will be justified by earlier
+root-certificate edges in Section~\ref{sec:interface}.
+Within the source graph they are ordinary chronological
+edges with distinct element identifiers.
+
+\subsection{Cyclic layers of constant rank}
+
+For each old body keep $D$ local independent sets
+$B_1,\ldots,B_D$. An incoming edge goes into the first
+local layer not spanning it, if there is one.
+At every prefix,
+\begin{equation}\label{eq:flat-chain}
+ \operatorname{cl}(B_1)\supseteq\cdots
+ \supseteq\operatorname{cl}(B_D).
+\end{equation}
+An edge inserted into a later layer was already spanned
+by every earlier one, proving this invariant.
+Equal-rank nested flats coincide. Since local rank is
+at most $\ell$, group consecutive equal-rank layers
+into at most $\ell+1$ intervals, retaining a representative
+basis and each layer's actual assigned edges.
+Test interval representatives and update the first layer
+of the first accepting interval. Only its basis changes;
+split the interval and merge equal-rank neighbors.
+This costs $O_{k,\ell}(1)$ per processed edge and $O(D)$
+initial storage per body.
+
+\subsection{A body-pair filter using only selected edges}
+
+For each old body pair $(a,b)$, maintain $H_{ab}$, the
+selected sample edges on that pair. The chronological
+reference algorithm on $e=uv$, $u\in A_a$, $v\in A_b$,
+is the following.
+\begin{enumerate}
+ \item If $a=b$, omit $e$ as already spanned by $P_0$.
+ If $H_{ab}$ spans $e$ relative to the two mandatory
+ bodies, omit it safely.
+ \item Otherwise process $e$ in the cyclic local layers
+ of both endpoint bodies.
+ \item Select $e$ into $H$ and $H_{ab}$ if either endpoint
+ layer accepts it, or if it is a known constraint.
+ Otherwise leave it outside $H$.
+\end{enumerate}
+The pair test uses the exact oracle \eqref{eq:local}.
+It involves only earlier \emph{selected} edges, rather
+than an independently scanned basis of the full input pair.
+
+\begin{lemma}\label{lem:adaptive-sample}
+In every prefix, $H_{ab}$ is independent and has size at
+most $\ell$, and
+\[
+ |H|\leq\ell qD+f.
+\]
+Let $F$ be the chronological greedy basis of $H$ after
+$P_0$. Every known constraint is spanned by $P_0$ and
+the $F$-prefix including its own source position. A known
+constraint omitted by the pair filter is already spanned by the
+strictly preceding $F$-prefix. Every omitted original
+edge that is not spanned by its $P_0+F$-prefix is spanned
+by all $D$ local layers at both endpoint bodies.
+\end{lemma}
+\begin{proof}
+The pair filter inserts only rank-increasing elements
+into $H_{ab}$. Each selected original edge uses a local
+layer slot at an endpoint; there are $\ell qD$ slots.
+At most $f$ additional known edges are selected.
+An omitted known edge, or an original edge rejected by
+the pair filter, is spanned by earlier $H_{ab}$.
+The relevant $F$-prefix is a basis of the $H$-prefix,
+so it spans these edges too.
+Any remaining omitted original edge was rejected in
+every local layer at both endpoints; all those layer
+edges belong to $H$. The bases are disjoint within
+one endpoint's layer system.
+\end{proof}
+
+This proves both hypotheses of Lemma~\ref{lem:cover}.
+Known constraints are included in $H$ or its prefix
+closure, and $|F|\leq\ell q$ still holds.
+No full preliminary scan by body pair is required.
+
+\section{Implicit execution on shared incidence lists}
+\label{sec:implicit}
+
+Initially retain only the first $c$ original edges of
+each physical vertex pair. The first $c$ copies form
+a two-vertex tight set, so this preserves every ordered
+greedy prefix. A constant-time initializable direct-address
+pair table gives $O(m+n)$ preprocessing \cite{initializable}.
+Build the original ordered incidence lists once, using
+doubly linked nodes, one at each endpoint of an edge.
+Unlinking the two nodes of an edge takes $O(1)$ time.
+All stages share these lists; they are never copied.
+
+At a stage, each physical vertex has a view cursor.
+Its view starts at the current live list head and can
+advance past locally rejected edges without removing
+them from the shared list. Those edges remain available
+at the next stage. Original selected edges and original
+edges with a valid prefix-spanning certificate are
+removed permanently.
+Known auxiliary edges use separate small ordered lists.
+Stage membership and activation predicates are fixed;
+their safety is proved in Section~\ref{sec:interface}.
+
+\subsection{Finding the next locally eligible edge}
+
+\begin{lemma}\label{lem:successor}
+For a nonfull final local layer $B_D$ and a fixed own
+pin $u$, its next locally eligible original incidence
+is found with constant local skipping work, apart from
+edges deleted permanently. A saturated own pin is
+disabled as a whole. Changes in $B_D$ cause at most
+$\ell$ full point-head rebuilds per body.
+\end{lemma}
+\begin{proof}
+If $|B_D|=\ell$, disable local search for the entire
+body. Otherwise, an edge is locally rejected exactly
+because its own pin has degree $k$, its neighbor pin
+has degree $k$, or its physical pair has multiplicity $c$.
+There is at most one saturated own pin because
+$|B_D|<\ell<2k$; disable its head in constant time.
+For another own pin $u$, at most $\ell$ neighbor
+identifiers are forbidden. Each has at most $c$ original
+incidences with $u$ in the entire root input.
+Thus at most $c\ell$ locally forbidden original records
+are skipped before the next eligible record.
+In fact this also bounds their total number at one own pin
+throughout a stage before that pin or its body is disabled:
+$B_D$ only gains edges, its union of neighbor identities has size
+at most $\ell$, and a view cursor never moves backwards.
+
+The last layer grows at most $\ell$ times, and its
+flat is unchanged between growth events. On each growth,
+recompute all point heads in that body, continuing from
+the current view cursors rather than resetting them.
+The separate known-edge lists contain $O(f)$ records;
+their total cursor advancement is $O(f)$.
+\end{proof}
+
+Keep an inner heap of eligible point heads for each
+body and an outer heap of the body minima. Compare
+the outer minimum with the next known constraint.
+Process the earliest edge that is locally eligible
+at some endpoint and still open in its body pair,
+or the next known constraint.
+When an endpoint's last layer grows, rebuild that
+body's point heads. Otherwise advance only the affected
+endpoint's head.
+
+Pair closure may make a queued head stale. Repair it
+lazily: remove a whole chain of currently pair-spanned
+incidences, perform all their constant-time unlinks,
+and insert only the next valid head into the heap.
+There is no individual heap update for each deleted
+edge. If the other endpoint's view cursor points at
+the removed node, advance it in constant time.
+A queued copy at that endpoint may remain stale until
+its own later repair.
+Keep at most one queued record per point and keep its key
+separate from the live view cursor. A stale queued node is
+detected by its live flag; repairing it starts from the already
+advanced cursor. Thus deletion does not require updates of
+other points' heap entries, or traversal of chains of dead nodes.
+
+The order of tests during head generation is essential.
+At either endpoint, check the static safety predicates of
+the entire edge (including both activation thresholds and both
+body identifiers), then local closure,
+and use the current $H_{ab}$ test only on a locally
+eligible record. An earlier locally skipped record is
+never deleted using a later sample edge as a witness.
+Local closure only grows, so that record cannot become
+eligible again in this stage. Every still-live eligible
+record deleted by a pair test occurs after the already
+processed sample edges. Pair deletion therefore always
+has a chronological certificate.
+
+\Needspace{8\baselineskip}
+\subsection{Saturations affecting many heads}
+
+\begin{lemma}\label{lem:saturation-events}
+While an old body $A_a$ has a nonfull final local layer,
+at most $\ell D+1$ different pair bases $H_{ab}$ can
+reach rank $\ell$. At most $\ell D+\ell+1$ different
+neighbor pins $y$ can reach degree $k$ in their pair
+base with $A_a$.
+\end{lemma}
+\begin{proof}
+Take the final still-nonfull basis $B$ of the last
+layer during this active interval: immediately before its first
+full-rank insertion, or at the end of the stage if it never fills.
+A full pair basis has rank $\ell$ in the local matroid
+as well: on that one pair the local and pair oracles
+coincide. It contains an edge outside $\operatorname{cl}(B)$.
+Since layer flats only grow, that edge was accepted
+in a local layer of $A_a$ on arrival.
+Different body pairs give distinct witnesses.
+There are at most $\ell D$ local acceptances; the
+final edge that disables the body adds at most one event.
+
+A degree-$k$ pair star at a neighbor pin $y$ either
+contains an edge outside $\operatorname{cl}(B)$,
+giving another local acceptance, or is wholly spanned
+by $B$. Stars for different $y$ have disjoint edges.
+In the latter case $y$ occurs in $B$.
+Indeed, all $k$ star edges cannot use the single
+saturated own pin, because each physical pair has
+at most $c<k$ selected copies.
+A spanned star edge from another own pin therefore
+requires saturation of $y$ in $B$ or saturation of
+its physical pair in $B$. Both make $y$ a neighbor
+endpoint of a basis edge.
+There are at most $\ell$ such $y$. Again the disabling
+edge adds at most one event.
+\end{proof}
+
+\begin{lemma}[Implicit sampling cost]\label{lem:heap-cost}
+Let $p$ be the number of physical vertices handled at a
+stage, and let $d$ be the number of original edges
+permanently unlinked at that stage. The implicit procedure
+produces exactly the reference sample and local layers,
+in time
+\begin{equation}\label{eq:heap-cost}
+ O\bigl(d+(Dp+qD+f)\log(n+2)+f\bigr).
+\end{equation}
+For the fixed $D$ used below, the coefficient of $d$
+does not depend on the number of stages.
+\end{lemma}
+\begin{proof}
+Pair closure changes only on four kinds of saturation:
+total rank $\ell$, own-pin degree $k$, neighbor-pin
+degree $k$, and physical-pair multiplicity $c$.
+The first and third kinds may affect all $p_a$ point
+heads of a body, but Lemma~\ref{lem:saturation-events}
+bounds them by $O(D)$ events while that body is active.
+The other two kinds affect only one own point head,
+and there are $O(|H|)$ such events.
+
+A repaired head is checked against \emph{all current}
+pair closure conditions. Another invalidation therefore
+needs a later saturation event or selection of that
+edge. This remains true if another endpoint's repair
+deletes the queued edge: an already valid head can be
+deleted only after a new pair-spanning event, or after
+selection. Static predicates are checked at both
+endpoint head generations and cannot later invalidate
+an otherwise valid head.
+Thus there are $O(Dp+|H|)$ head repairs and
+$O(\ell p)$ rebuilding point visits.
+Binary heaps give the logarithmic term, since
+$|H|\leq\ell qD+f$.
+More explicitly, charge a stale point head to the first event
+since its last valid installation that invalidated that record.
+A rank or neighbor-pin saturation is charged at most once per
+point before that point's next repair, and there are $O(D)$ such
+events per active body. An own-pin or physical-pair saturation
+affects just its own point in each endpoint body. Selection of
+an original edge is charged to at most its two queued copies.
+Rebuilding a body's heads on growth of $B_D$ accounts separately
+for at most $\ell$ visits to each of its points. Deleting several
+records during one repair does not create an event or a heap
+operation for each record.
+
+Locally skipped original incidences are bounded by
+Lemma~\ref{lem:successor}. A long safe-deletion chain
+charges each edge only its constant-time unlink;
+it has only one final heap update.
+Known-list cursor work sums to $O(f)$.
+
+The heaps and known stream always expose the earliest
+edge eligible at an endpoint and open in its pair.
+An original edge skipped at both endpoints is already
+rejected by all layers there. Monotone flats cannot
+make it eligible later.
+An earlier eligible edge therefore cannot be hidden
+behind a later processed edge.
+Induction over selected edges gives exactly the
+reference sample and exactly the reference local
+layer contents.
+\end{proof}
+
+\section{The fixed first-binding interface}
+\label{sec:interface}
+
+Sampling and the sparse optimizer give the chronological
+basis $F$ of $P_0+H$. From it choose all current large
+blocks and the fixed exceptional old bodies $X$.
+Retire an exceptional body's identifier when that
+body is wholly absorbed by a large block.
+The active tracked tight sets intersect pairwise in
+at most one pin. Their total number of persistent
+identifiers is
+\[
+ R\leq Q+|X|=O(q/D).
+\]
+Lemma~\ref{lem:hinges} applies to this family, including
+the exceptional bodies as identifiers present initially.
+It gives $O(R)$ known relationships and a set $T$ of
+historically shared physical pins with $|T|\leq3\ell R$.
+
+\begin{lemma}\label{lem:interface}
+In $q^{1+o(1)}$ preprocessing time and $O(n)$ additional
+original-vertex work, the source history can be turned
+into the next stage with:
+\begin{enumerate}
+ \item $q'\leq C_*q/D$ disjoint mandatory tight frames;
+ \item $O(q')$ known chronological auxiliary edges;
+ \item one fixed body identifier $\lambda'(v)$ and one
+ activation threshold $\tau'(v)$ per original vertex; an always
+ inactive vertex uses $\lambda'(v)=\botval$.
+\end{enumerate}
+Here $C_*$ depends only on $k,\ell$.
+Closure in the new model is safe in the corresponding
+original weight prefix. An unselected original edge
+that fails its endpoint activation test is already
+spanned by earlier root-certificate edges.
+\end{lemma}
+\begin{proof}
+\emph{Disjoint initial frames.}
+Make one fresh tight frame for every tracked identifier.
+For every $z\in T$, also make a distinct fresh tight
+frame with exactly one used physical pin, namely $z$,
+and its $k$ private attachments.
+The pin retains $k$ free coordinates, because $U_z$
+has row rank $k$; the extra $\ell-k$ frame parameters
+impose no original constraint.
+Initial frames are disjoint and their internal bases
+are independent. There are
+\begin{equation}\label{eq:child-count}
+ q'=R+|T|\leq(1+3\ell)R
+\end{equation}
+of them.
+
+\emph{Known constraints.}
+An actual attachment of a shared pin $z$ to tracked
+frame $A$ is represented by $k$ edges from $z$ to
+distinct core vertices of $A$. By \eqref{eq:motions},
+these impose $\xi_z=U_z\alpha_A$.
+To identify a retired frame $B$ with frame $A$,
+use $\ell$ diagonal edges between their cores,
+with at most $c$ copies per corresponding core pair.
+The width \eqref{eq:frame-width} is sufficient.
+Their degrees are at most $c<k$, their pair
+multiplicities at most $c$, and their number is $\ell$.
+By \eqref{eq:local}, they are independent and make
+the two-frame union tight in the contraction by the two mandatory
+frames. Their constraints annihilate all motions with equal
+parameters. There are $\ell$ independent constraints on the
+$2\ell$ parameters, so their nullspace is exactly that
+$\ell$-dimensional equal-parameter space. They impose exactly
+$\alpha_A=\alpha_B$.
+No fresh merger pins are needed.
+Insert these known edges at the source $F$-prefix
+when the relationship becomes true.
+The compressed history has $O(R)=O(q')$ such edges.
+
+\emph{Fixed bindings and times.}
+For an original pin $v\notin T$, bind it to the
+\emph{first} tracked identifier that contains it.
+If no such identifier exists, leave it unbound and inactive.
+This identifier is fixed for the whole next stage.
+Later retirement is handled by parameter equality,
+so no endpoint renaming is necessary.
+If $v$ could belong to two distinct active tracked
+sets, the complete offline history would place it
+in $T$; then its separate free frame and known
+attachments retain the same physical coordinates.
+For $v\in T$, use that separate free frame as its
+fixed initial body.
+
+Let $b(v)$ be the first tracked membership time;
+put $b(v)=+\infty$ when there is no membership.
+In the implementation $+\infty$ is the sentinel $m+1$, which
+is larger than every original query index.
+Compose the new threshold with the old one by
+\begin{equation}\label{eq:activation}
+ \tau'(v)=\max\{\tau(v),b(v)\}.
+\end{equation}
+Frames that will be born later may already exist
+initially: no earlier usable original edge involves
+them, and their known relationships arrive only at
+the justified prefix.
+Coordinates of an original vertex bound to such a
+frame need not match the root coordinates before
+its activation time.
+
+\emph{The chronological extension invariant.}
+For each root weight prefix, every motion satisfying
+the selected original certificate has a lift to a motion
+of the current source model, with identical coordinates
+at all original vertices whose thresholds have passed.
+Each source model has its own coordinate space. It uses the same
+$U_v$ and original-edge coefficients for an original physical
+identity $v$, but agreement of its coordinate vector with the
+root vector is imposed only after activation. Before activation
+the source coordinate may be chosen independently of the root
+coordinate. Thus ``lift'' does not assert simultaneous satisfaction
+of all stages' mandatory rows in one root coordinate space.
+The source rows are its mandatory initial bases,
+the known constraints arrived so far, and its own
+selected original sample rows so far.
+Original rows from ancestor stages are not copied
+into the new source model; the root motion already
+satisfies them.
+
+To establish the invariant at the interface, first take
+a lift of the root motion to the parent model.
+Its $F$-prefix is a basis of its $H$-prefix.
+On each tracked tight set, the motion thus has
+form \eqref{eq:motions}; choose that $\alpha_A$
+for its new frame. For a persistent identifier its birth set
+already determines the parameter uniquely. Its growing sets
+and containing successor sets already present at this prefix
+have the same parameter,
+because they contain that birth set. Thus these choices are
+consistent with the arrived history. An identifier not yet born
+has no arrived relationship and its parameter can be chosen freely.
+Preserve the physical coordinates of shared pins.
+Attachments and parameter identifications hold
+at exactly their justified parent times.
+Unused future frame coordinates can be completed
+freely. If a root vertex is active in the child,
+it was active in the parent and already belongs
+to its tracked set, so its coordinates agree.
+Every sample edge selected subsequently at the
+child stage has active endpoints on arrival.
+Thresholds are fixed within a stage, so those rows
+continue to be evaluated on root coordinates in
+all later prefixes and are satisfied by the root
+certificate motion.
+This proves the invariant and hence the safety
+of source closure.
+
+\emph{Activation discards.}
+Consider an original edge outside $H$ that passed
+its old thresholds but has an endpoint not yet in
+any tracked set. If it were open in the parent
+$P_0+F$-prefix, Lemma~\ref{lem:cover} would place
+both endpoints in the tracked family.
+It is therefore already parent-prefix-spanned.
+The old invariant still identifies its coordinates
+with the root coordinates, so this discard is safe.
+Failure of an earlier threshold was already justified
+at an earlier interface.
+
+\emph{Computing vertex metadata.}
+Only $O(q)$ physical pins occur in actual $F$-edges.
+A never-used lazy pin cannot partially enter a
+new maximal block: without new incident edges,
+its unique maximal block contains its whole old
+body. Such pins therefore share their old body's
+first-membership event.
+Registered-pin exceptions and $T$ are obtained
+from the $O(q)$-size actual source history.
+For each original vertex, its old identifier and
+optional registered-pin record determine its new
+identifier and threshold. One $O(n)$ vertex pass
+computes all metadata without reading original
+edges. The sparse history preparation costs
+$q^{1+o(1)}$.
+\end{proof}
+
+\begin{remark}
+The child need not inherit the closure of every small
+parent block. Such an edge may be open in the weaker
+child model and may be selected into a later sample.
+This is allowed: each stage selects at most
+$\ell qD+f$ original and known edges, and final
+optimization is performed in the original matroid.
+The argument uses safe discards, not equivalence of
+all parent and child closure answers.
+\end{remark}
+
+\section{One fixed algorithm and its total cost}
+\label{sec:complete}
+
+\subsection{Fixing the constants once}
+
+Use the constants
+\begin{align*}
+ P_*&=2\ell+\ell^2(1+2\ell/c),\\
+ A_*&=16\ell^2/c,\\
+ C_R&=A_*+2P_*+(2\ell/c+3\ell)A_*,\\
+ C_*&=(1+3\ell)C_R,
+\end{align*}
+and fix
+\begin{equation}\label{eq:fixed-D}
+ D=\left\lceil\max\{4\ell,4C_*\}\right\rceil.
+\end{equation}
+The threshold $s=\max\{2,\lfloor D/(4\ell)\rfloor\}$
+satisfies $s\geq D/(8\ell)$.
+Thus $Q\leq A_*q/D$.
+The potential exceptions contribute at most $2P_*q/D$,
+and the historical straddlers at most
+$(2\ell/c+3\ell)Q$.
+It follows that $R\leq C_Rq/D$, and
+Lemma~\ref{lem:interface} gives
+\begin{equation}\label{eq:geometric}
+ q'\leq C_*q/D\leq q/4.
+\end{equation}
+The integer $D$ depends only on $k,\ell$, not on $n$,
+$m$, recursion depth, or an exponent-error parameter.
+
+\subsection{The initial stage}
+
+Give each original vertex $v$ a disjoint constant-size
+tight frame with $v$ as its one used physical pin,
+attached privately by $k$ edges.
+Start with $q_0=n$, $\tau_0(v)=0$, and no known
+auxiliary edge.
+This introduces no restriction on original coordinates:
+one used pin retains $k$ free coordinates in its
+$\ell$-parameter body.
+Equivalently, in \eqref{eq:body-count} every touched
+body contributes $k$, so the induced edge matroid
+is exactly the original $(k,\ell)$-sparsity matroid.
+Initial auxiliary rows are not returned as original edges.
+
+\begin{algorithm}[htbp]
+\caption{Uniform deterministic original-edge certificate}
+\label{alg:complete}
+\textbf{Input:} Ordered original edges; fixed $k<\ell<2k$.\par
+\textbf{Output:} $\mathcal C$ with $|\mathcal C|=O(n)$ and
+$\Bj\ell{\mathcal C}=\Bj\ell E$.
+\begin{enumerate}[label=\arabic*:,leftmargin=2em,itemsep=2pt,topsep=4pt]
+\item Fix $D$ by \eqref{eq:fixed-D}.
+\item Keep only the first $c$ copies of every physical pair.
+\item Build the shared ordered incidence lists once.
+\item $\mathcal C\gets\varnothing$; initialize the $n$-body model.
+\item \textbf{While} the current body count $q$ exceeds $D$:
+\begin{enumerate}[label=\alph*.,leftmargin=1.5em,itemsep=2pt,topsep=2pt]
+ \item Generate $H$ by the implicit adaptive-pair sampler.
+ \item Add every selected original edge to $\mathcal C$.
+ \item Permanently unlink selected or safely spanned original edges.
+ \item On the explicit sparse graph, compute the chronological
+ basis $F$ after the mandatory $P_0$.
+ \item Compute logical block history, $X$, tracked identifiers,
+ and shared pins $T$.
+ \item Build the child model and fixed vertex metadata by
+ Lemma~\ref{lem:interface}.
+\end{enumerate}
+\item In one final pass over the original edge array, process
+ still-live usable edges in the constant-size source model,
+ merging the known-constraint stream chronologically.
+\item Add its rank-increasing original edges to $\mathcal C$.
+\item \textbf{Return} $\mathcal C$.
+\end{enumerate}
+\end{algorithm}
+
+At stage $j$, the metadata are fixed. An original
+$e_i=uv$ is usable precisely when
+$i\geq\tau_j(u),\tau_j(v)$.
+All ancestor activation conditions have already
+been folded into these two thresholds.
+Only two endpoint lookups are performed; the edge
+does not query a sequence of ancestor closure indices.
+Within-body edges are spanned by the mandatory
+model. Static usability and within-body tests are
+applied during implicit head generation.
+Edges at vertices whose views never become active
+need not be discovered until the final array pass.
+
+Known constraints carry root-prefix timestamps. Such a constraint
+may be justified by several selected original edges; its timestamp
+identifies the last possible supporting original position, rather
+than claiming that one original edge alone implies the constraint.
+Every positive such timestamp is the index of an original edge
+selected at an ancestor or earlier stage and already removed
+from the live lists. The same is true of every positive first-
+membership and activation timestamp.
+Constraints with that timestamp are ordered
+after that original edge and before the next
+original edge. An inherited known-constraint time
+has the same property transitively.
+Thus no still-live original query at the same
+root index precedes a constraint it uses.
+Auxiliary edge elements still have distinct identifiers.
+For a still-live original $e_i$, passing a finite positive
+activation threshold therefore means that threshold is strictly
+less than $i$. All source conditions used to discard $e_i$ are
+valid in the root prefix strictly preceding $e_i$, not merely in
+a prefix that includes the queried edge. Timestamp zero refers
+to the unrestricted initial model. Multiple auxiliary edges at
+one timestamp have a fixed internal order; original queries at
+that timestamp have already been removed.
+
+\subsection{The constant-body terminal stage}
+
+When $q\leq D$, the source has constant total body
+parameter dimension. Use the incremental component
+matrix of the component pebble-game algorithm
+\cite{quadratic}, on a preallocated constant-size
+vertex universe containing all possible successful
+registrations.
+Pre-register the endpoints of the $O(q)$ known rows, as well as
+the cores. Reserve at most $2\ell q$ additional original-pin slots.
+There are at most $\ell q$ independent new source
+rows and $O(q)$ known rows, and consequently only
+$O(q)$ actually registered query endpoints.
+
+If $q=0$, all remaining original vertices are inactive and the
+final pass only performs the activation test. For $q>0$, apply
+both-endpoint activation and within-body tests first.
+An unsuccessful virtual-pin query requires no
+registration:
+\begin{enumerate}
+ \item For two registered endpoints, read their
+ common-component bit.
+ \item For a registered $u$ and an unregistered
+ pin attached to frame $B$, test the closure
+ bits from $u$ to the $k$ distinguished core
+ vertices of $B$. They are all true exactly
+ when $u$ belongs to the maximal block
+ containing $B$.
+ \item For two unregistered pins of frames
+ $A,B$, test all cross-pair core closure bits.
+ They are all true exactly when the two
+ frames lie in one maximal block.
+\end{enumerate}
+The frame size is constant.
+For the second equivalence, the $k$ tested edge rows, together
+with a tight basis of $B$, form a tight graph on $B\cup\{u\}$
+(membership $u\in B$ is immediate). If all tested rows are
+spanned, Lemma~\ref{lem:spanned-tight} puts $u$ and $B$ in one
+block. The converse is Lemma~\ref{lem:uncross}.
+For the third equivalence, all true cross-pair bits span the
+$\ell$ diagonal rows used to join $A$ and $B$; those rows and
+the two frame bases form a tight graph. Apply
+Lemma~\ref{lem:spanned-tight} again. Finally a pin with no new
+incident edge belongs only to the maximal block containing its
+frame, by the fresh-pin argument in Section~\ref{sec:bodies}.
+These statements also show that omitting unsuccessful
+registrations leaves all answers on registered vertices unchanged.
+On a successful original query, register its
+missing endpoints with private attachments
+and insert the original edge.
+The bounded total number of insertions costs
+$O(1)$ for fixed $k,\ell,D$, and each remaining
+original query has constant cost.
+The final pass therefore costs $O(m+n)$.
+
+\subsection{Correctness and the uniform additive bound}
+
+\begin{proof}[Proof of Theorem~\ref{thm:main}]
+For $\ell\leq k$, use Proposition~\ref{prop:lower}.
+For the upper range, construct $\mathcal C$ by
+Algorithm~\ref{alg:complete} and then run
+$\Sparse(\ell,\mathcal C)$ in the original matroid.
+
+\emph{Correctness.}
+The initial physical-pair truncation preserves
+ordered greedy prefixes, since each later copy
+is spanned by the first $c$ copies.
+On the retained input, every later original
+discard has a certificate using only earlier
+selected original edges in its own weight prefix.
+Pair-filter discards use earlier $H_{ab}$.
+Activation discards and within-body discards
+are justified by Lemma~\ref{lem:interface}.
+The motion-extension invariant transfers every
+source dependence to the original matroid.
+Known auxiliary conditions themselves are
+supported by earlier original samples, transitively;
+they are not included in the original output.
+
+A weaker child model may select an original
+edge that was already dependent in the parent.
+Keeping such an extra candidate is harmless:
+all samples are retained in $\mathcal C$, and
+final optimization uses the original matroid.
+At the terminal stage, the exact source basis
+and its known constraints justify all remaining
+discards in the same way.
+Thus every omitted original edge is spanned
+by the earlier $\mathcal C$-prefix.
+This preserves every prefix rank and hence
+the ordered greedy output. The final sparse
+optimization returns the required maximum-weight
+$(k,\ell)$-sparse subgraph.
+Initial truncation witnesses also transfer to
+the final certificate by this prefix-preservation
+property.
+
+\emph{Original input work.}
+Reading and truncating the input and building
+the incidence lists costs $O(m+n)$.
+Let $d_j$ count original unlinks at stage $j$.
+Each edge is unlinked at most once, so
+\[
+ \sum_j d_j\leq m.
+\]
+Its two list modifications take constant time.
+Lemma~\ref{lem:heap-cost} does not attach a
+separate heap update to every deleted edge.
+The single final array pass adds $O(m)$.
+Original records skipped locally without
+deletion are charged to the stage's point-head
+bound, rather than to a repeated complete
+edge scan.
+The direct original-edge work is therefore
+$C_{k,\ell}m$, with a coefficient independent
+of recursion depth.
+
+\emph{Point and source work.}
+By \eqref{eq:geometric},
+\[
+ \sum_jq_j=O(n),\qquad
+ \text{number of stages}=O(\log(n+2)).
+\]
+Known-edge counts satisfy $f_j=O(q_j)$,
+so $\sum_jf_j=O(n)$.
+The explicit graph for a stage sample has
+$O(Dq_j+f_j)$ vertices and edges, including
+its constant frames and registered pins.
+After computing $F$, unused physical pins
+can again be treated lazily.
+Since $D$ is fixed, all sparse optimizations
+and prefix-history constructions together cost
+\[
+ \sum_j(Dq_j+f_j)^{1+o(1)}
+ =n^{1+o(1)}.
+\]
+
+A stage handles at most the $n$ original
+points and $O(q_j)$ known-edge and frame
+points. Thus $p_j\leq n+O(q_j)$ and
+$\sum_jp_j=O(n\log(n+2))$.
+Vertex-metadata passes, head rebuilds, and
+the non-input part of \eqref{eq:heap-cost}
+sum to $O(n\log^2(n+2))$.
+All freshly created auxiliary points over
+all stages number $O(\sum_jq_j)=O(n)$.
+
+Finally,
+\[
+ |\mathcal C|
+ \leq\sum_j(\ell Dq_j+f_j)+O(1)=O(n).
+\]
+Its final sparse optimization takes
+$n^{1+o(1)}$ time.
+Combining the bounds gives
+\[
+ O\!\left(m+n\log^2(n+2)
+       +\sum_jq_j^{1+o(1)}\right)
+ =O(m+n^{1+o(1)}).
+\]
+All heaps, local oracles, initializable tables,
+flows, decompositions, and history computations
+are deterministic. The constants were fixed
+once in \eqref{eq:fixed-D}, establishing the
+claimed uniform quantifier order.
+\end{proof}
+
+\begin{remark}
+The generic matrices and motions occur only
+in the correctness proof. No random coordinates
+or polynomial identity tests are used.
+Body-pair tables may use quadratic address space
+with constant-time initialization. The claimed
+bound is the uniform additive running time.
+\end{remark}
+
+\section{Exact checks and their scope}
+\label{sec:checks}
+
+The original manuscript reports the following exact combinatorial
+checks from its development. Their scripts and logs were not supplied
+with the manuscript, so these original counts have not been
+independently reproduced in this review.
+\begin{itemize}
+ \item For fixed body partitions, $160$ implicit-local
+ sampling tests, with $72\,533$ input edges in total,
+ produced exactly the same local layers and samples
+ as direct chronological execution.
+ \item The adaptive selected-pair filter was checked
+ on another $160$ tests with $120\,414$ input edges.
+ All layer contents and selected edges agreed.
+ These runs had $43\,497$ safe deletions and only
+ $3516$ lazy heap-head repairs. The saturation-event
+ bounds were checked for every active body.
+ A separate heavy-pair example had $3765$ input
+ edges, $33$ selected edges, and $3732$ safe deletions.
+ \item Endpoint coverage was checked on four exact
+ source graphs with $2014$ input edges.
+ A further structured $601$-edge example had a
+ genuinely open omitted edge: the sample contained
+ the first $600$ edges, and the last edge's endpoints
+ were covered by two different large blocks.
+ \item Fixed first bindings, separate free shared-pin
+ frames, and timed diagonal identifications were
+ checked on $24$ exact histories.
+ There were $4046$ helper queries without an external
+ parent-closure guard, including $952$ edges already
+ spanned in the parent. Another $172$ edges were
+ safely omitted by activation times before their
+ future frames were born.
+ Every resulting original-edge certificate gave
+ the same ordered greedy optimum as the full input.
+\end{itemize}
+
+The October 11, 2026 review additionally supplies reproducible
+Python scripts using integer arithmetic, exhaustive vertex-subset
+tests, and integral minimum cuts. With fixed seeds $20261011$
+and $20261012$, all of the following independent checks passed:
+\begin{itemize}
+ \item $2158$ weak/strong circuit and greedy-compatibility instances,
+ including both edge orders on every four-vertex multigraph with
+ zero, one, or two copies per pair for $(k,j)=(2,3)$;
+ $1429$ prefix histories and $83\,992$ closure queries.
+ \item $1800$ disjoint-body independence queries against exhaustive
+ physical-vertex sparsity; $250$ adaptive-sampling instances with
+ $43\,093$ input edges and $1040$ separate pair-discard safety checks.
+ \item $250$ implicit/reference sampling comparisons, with
+ $43\,686$ original edges and $2189$ timed known rows.
+ Samples and every local layer agreed. The runs checked
+ $26\,460$ safe unlinks and $7665$ stale-head repairs.
+ The test uses a flat heap of point heads, which exposes the same
+ minimum as the nested heaps; it does not measure their runtime.
+ \item $200$ reverse rooted-cut histories with $1485$ states,
+ compared with exhaustive cut enumeration.
+ \item $250$ lower-range union-certificate instances, including
+ $188$ cases with $\ell=0$ or $\ell=k$. The final-present-type
+ shortcut chose the same layer as direct execution, and every
+ certificate preserved the full ordered greedy output.
+ \item $100$ covered tracked-frame interface histories, involving
+ $278$ identifiers, $132$ historically shared pins,
+ $1096$ known-row queries and $555$ remaining original queries.
+ All $441$ discards, including $85$ activation discards, were
+ safe in the strict parent prefix, and every certificate preserved
+ the ordered parent greedy output.
+ These tests augment the exceptional family to enforce qualitative
+ endpoint coverage; they do not test its asymptotic size bound.
+ \item $3796$ terminal virtual-pin closure queries, compared with
+ the exact body-count oracle after explicit virtual-pin inclusion.
+\end{itemize}
+
+The scripts and their machine-readable result files accompany the
+reviewed source. These finite checks exercise specific lemmas and
+interfaces. They are not a full implementation, formal verification,
+or an empirical verification of the asymptotic running time.
+The running-time claim rests on the amortized proof of
+Theorem~\ref{thm:main} and the cited algorithmic primitives.
+
+\begin{thebibliography}{99}
+\raggedright
+
+\bibitem{initializable}
+Torben Hagerup and Frank Kammer.
+\emph{On-the-Fly Array Initialization in Less Space}.
+ISAAC 2017, LIPIcs 92, 44:1--44:12.
+\url{https://doi.org/10.4230/LIPIcs.ISAAC.2017.44}.
+
+\bibitem{natural}
+Ileana Streinu and Louis Theran.
+\emph{Natural Realizations of Sparsity Matroids}.
+Ars Mathematica Contemporanea 4(1), 141--151, 2011.
+See Section 3 for the generic $U$ construction.
+\url{https://arxiv.org/abs/0711.3013}.
+
+\bibitem{mcf}
+Jan van den Brand, Li Chen, Rasmus Kyng, Yang P. Liu,
+Richard Peng, Maximilian Probst Gutenberg, Sushant Sachdeva,
+and Aaron Sidford.
+\emph{A Deterministic Almost-Linear Time Algorithm
+for Minimum-Cost Flow}.
+FOCS 2023; arXiv:2309.16629.
+\url{https://arxiv.org/abs/2309.16629}.
+
+\bibitem{forest}
+Pavel Arkhipov and Vladimir Kolmogorov.
+\emph{Faster algorithms for packing forests in graphs
+and related problems}.
+arXiv:2409.20314, version 3, 2026.
+\url{https://arxiv.org/abs/2409.20314}.
+
+\bibitem{recognition}
+Bence Deák and Péter Madarasi.
+\emph{Asymptotically Faster Algorithms for Recognizing
+$(k,\ell)$-Sparse Graphs}.
+arXiv:2604.13025, version 2, 2026.
+\url{https://arxiv.org/abs/2604.13025}.
+
+\bibitem{arborescences}
+Anand Bhalgat, Ramesh Hariharan, Telikepalli Kavitha,
+and Debmalya Panigrahi.
+\emph{Fast Edge Splitting and Edmonds' Arborescence
+Construction for Unweighted Graphs}.
+SODA 2008, pp.\ 455--464.
+\url{https://users.cs.duke.edu/~debmalya/papers/soda08-splitting.pdf}.
+
+\bibitem{arbo-study}
+Loukas Georgiadis, Dionysios Kefallinos, Anna Mpanti,
+and Stavros D. Nikolopoulos.
+\emph{An Experimental Study of Algorithms for Packing
+Arborescences}.
+SEA 2022, LIPIcs 233, 14:1--14:16.
+\url{https://doi.org/10.4230/LIPIcs.SEA.2022.14}.
+
+\bibitem{minset}
+Harold N. Gabow.
+\emph{The minset-poset approach to representations
+of graph connectivity}.
+ACM Transactions on Algorithms 12(2), 24:1--24:73, 2016.
+\url{https://doi.org/10.1145/2764909}.
+
+\bibitem{minset-2026}
+Loukas Georgiadis, Evangelos Kipouridis, Evangelos Kosinas,
+Charis Papadopoulos, and Nikos Parotsidis.
+\emph{Computing the $(k+2)$-Edge-Connected Components in
+$k$-Edge-Connected Digraphs in Subquadratic Time}.
+ICALP 2026, LIPIcs 374, 95:1--95:23.
+See Proposition 27 for the minset-poset construction bound.
+\url{https://arxiv.org/abs/2604.27474}.
+
+\bibitem{static-union}
+Harold N. Gabow and Robert Endre Tarjan.
+\emph{A linear-time algorithm for a special case
+of disjoint set union}.
+Journal of Computer and System Sciences 30(2),
+209--221, 1985.
+\url{https://doi.org/10.1016/0022-0000(85)90014-5}.
+
+\bibitem{quadratic}
+Bence Deák and Péter Madarasi.
+\emph{Quadratic-Time Algorithm for the Maximum-Weight
+$(k,\ell)$-Sparse Subgraph Problem}.
+arXiv:2511.20882, 2025.
+\url{https://arxiv.org/abs/2511.20882}.
+
+\end{thebibliography}
+\end{document}
